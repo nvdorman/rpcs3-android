@@ -7,6 +7,9 @@ name: Java CI with Gradle
 on:
   workflow_dispatch:
     inputs:
+      shouldrelease:
+          description: Create release
+          type: boolean
       releasetag:
         description: Enter the tag name
         type: string
@@ -31,8 +34,8 @@ jobs:
     - name: Maximize build space
       uses: easimon/maximize-build-space@master
       with:
-          root-reserve-mb: 512
-          swap-size-mb: 1024
+          root-reserve-mb: 16384
+          swap-size-mb: 16384
           remove-dotnet: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
@@ -45,12 +48,19 @@ jobs:
         fetch-depth: 0
         lfs: true
 
-    - name: Bootstrap
-      continue-on-error: true
-      run: |
-        sudo apt -y update
-        sudo apt -y upgrade
+    - name: Setup CCache
+      uses: hendrikmuhs/ccache-action@v1.2
 
+    - name: Setup Gradle Cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-android-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-android-
+            
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
@@ -71,6 +81,9 @@ jobs:
       run: ./gradlew
 
     - name: Build with Gradle
+      env: 
+        CMAKE_C_COMPILER_LAUNCHER: "ccache"
+        CMAKE_CXX_COMPILER_LAUNCHER: "ccache"
       run: ./gradlew build
 
     - name: Build release artifacts
@@ -83,7 +96,7 @@ jobs:
 
     - name: Create release
       uses: softprops/action-gh-release@v2
-      if: ${{ github.event_name == 'workflow_dispatch' }}
+      if: ${{ inputs.shouldrelease }}
       with:
         prerelease: ${{ inputs.releasetype }}
         tag_name: ${{ inputs.releasetag }}
